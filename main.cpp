@@ -3,6 +3,7 @@
 #include <functional>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/opencv.hpp>
 
 struct TrackbarCallbackData
 {
@@ -44,56 +45,53 @@ int main(int argc, char* argv[])
 	// 3. Blur 3x3 img2
 	blur(img2, img2, Size(3, 3));
 
-	// 4. Threshold img2
-	threshold(img2, img2, 125, 255, THRESH_BINARY);
+  namedWindow("Step 11", CV_WINDOW_AUTOSIZE);
+  int thresh= 80;
+  TrackbarCallbackData tcd([&](int v, void* d){
+    Mat out;
+	  // 4. Threshold img2
+    threshold(img2, out, v, 255, THRESH_BINARY);
+    // 5. Find Contours img2
+    std::vector<std::vector<Point>> contours;
+    std::vector<Vec4i> hierarchy;
+    findContours(out, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
 
-	// 5. Find Contours img2
-	std::vector<std::vector<Point>> contours;
-	std::vector<Vec4i> hierarchy;
-	findContours(img2, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+    // 6. Get Longest (hand) Contour
+    auto max_contour = std::max_element(contours.begin(), contours.end(), [](std::vector<Point> const &v1, std::vector<Point> const &v2){
+      return v1.size()< v2.size();
+    });
+    if (max_contour == contours.end())
+      throw std::runtime_error("No contours found!");
+    auto max_contour_index = std::distance(contours.begin(), max_contour);
 
-	// 6. Get Longest (hand) Contour
-	auto max_contour = std::max_element(contours.begin(), contours.end(), [](std::vector<Point> const &v1, std::vector<Point> const &v2){
-		return v1.size()< v2.size();
-	});
-	if (max_contour == contours.end())
-		throw std::runtime_error("No contours found!");
-	auto max_contour_index = std::distance(contours.begin(), max_contour);
+    // 7. Draw Contour filled img3
+    Mat img3(out.size(), CV_8UC1, Scalar(0));
+    drawContours(img3, contours, max_contour_index, Scalar(255), CV_FILLED);
 
-	// 7. Draw Contour filled img3
-	Mat img3(img2.size(), CV_8UC1, Scalar(0));
-	drawContours(img3, contours, max_contour_index, Scalar(255), CV_FILLED);
-
-	// 8. Use img3 as mask to copy img to img3
-	img.copyTo(img3, img3);
-
-	// 9. Convert to grayscale img3
-	cvtColor(img3, img3, CV_BGR2GRAY);
-
-	// 10. Equalize histogram to make lines darker
-	//equalizeHist(img3, img3);
-
-	namedWindow("Step Test", CV_WINDOW_AUTOSIZE);
-	imshow("Step Test", img3);
-
-	threshold(img3, img3, 165, 255, cv::THRESH_BINARY);
-	//Canny(img3, img3, 50, 200);
-
-	contours.clear();
-	hierarchy.clear();
-	findContours(img3, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
-	std::sort(contours.begin(), contours.end(), [](std::vector<Point> const &v1, std::vector<Point> const &v2){
-		return v1.size() > v2.size();
-	});
-	contours.resize(3);
-	/// Draw contours
-	Mat drawing = Mat::zeros(img3.size(), CV_8UC3);
-	for (int i = 0; i< contours.size(); i++)
-		drawContours(img, contours, i, Scalar(0, 255, 0), 2, 8, hierarchy, 0, Point());
-	
-	namedWindow("Step Test 2", CV_WINDOW_AUTOSIZE);
-	imshow("Step Test 2", img);
-
-	waitKey(0);
+    // 8. Use img3 as mask to copy img to img3
+    img.copyTo(img3, img3);
+    imshow("Step 11", img3);
+    
+  }, &img2);
+  createTrackbar("Step 11 Thresh", "Step 11", &thresh, 255, &trackbar_callback, &tcd);
+  tcd.fun(thresh, &img2);
+  waitKey(0);
 	destroyAllWindows();
+  return EXIT_SUCCESS;
+/*
+	// 9. Convert to grayscale img3
+  // GaussianBlur(img3, img3, Size(5,5), 0, 0, BORDER_DEFAULT );
+	cvtColor(img3, img3, CV_BGR2GRAY);
+  Laplacian(img3, img3, CV_8U, 5, 1, 0, BORDER_DEFAULT);
+	fastNlMeansDenoising(img3, img3, 70);
+  threshold(img3, img3, 70, 255, THRESH_BINARY);
+
+  namedWindow("Step 11", CV_WINDOW_AUTOSIZE);
+	imshow("Step 11", img3);
+	
+  // Remove thin lines
+  
+  waitKey(0);
+	destroyAllWindows();*/
 }
+// http://stackoverflow.com/questions/17195325/palm-veins-enhancement-with-opencv
